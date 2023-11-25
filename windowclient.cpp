@@ -7,6 +7,11 @@
 extern WindowClient *w;
 
 #include "protocole.h"
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+#include <sys/shm.h>
+
 
 int idQ, idShm;
 #define TIME_OUT 120
@@ -23,8 +28,19 @@ WindowClient::WindowClient(QWidget *parent):QMainWindow(parent),ui(new Ui::Windo
     ::close(2);
     logoutOK();
 
+    MESSAGE MsgConnect;
+    MsgConnect.type=1;
+    MsgConnect.expediteur=getpid();
+    MsgConnect.requete=CONNECT;
+    
     // Recuperation de l'identifiant de la file de messages
     fprintf(stderr,"(CLIENT %d) Recuperation de l'id de la file de messages\n",getpid());
+
+    if ((idQ = msgget(CLE,0)) == -1)
+    {
+      fprintf(stderr,"\n(CLIENT %d) Erreur de msgget", getpid());
+      exit(1);
+    }
 
     // Recuperation de l'identifiant de la mémoire partagée
     fprintf(stderr,"(CLIENT %d) Recuperation de l'id de la mémoire partagée\n",getpid());
@@ -34,6 +50,12 @@ WindowClient::WindowClient(QWidget *parent):QMainWindow(parent),ui(new Ui::Windo
     // Armement des signaux
 
     // Envoi d'une requete de connexion au serveur
+    
+    if (msgsnd(idQ,&MsgConnect,sizeof(MESSAGE)-sizeof(long),0) == -1)
+    {
+      perror("(Client) Erreur de msgsnd");
+      exit(1);
+    }
 }
 
 WindowClient::~WindowClient()

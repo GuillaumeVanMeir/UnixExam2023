@@ -42,6 +42,8 @@ int main()
     perror("(SERVEUR) Erreur de msgget");
     exit(1);
   }
+  printf("\n\nidQ = %d\n\n",idQ);
+
 
   // Initialisation du tableau de connexions
   fprintf(stderr,"(SERVEUR %d) Initialisation de la table des connexions\n",getpid());
