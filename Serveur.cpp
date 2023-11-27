@@ -15,13 +15,15 @@
 #include <setjmp.h>
 #include "protocole.h" // contient la cle et la structure d'un message
 
+#include "FichierUtilisateur.h"
+
 int idQ,idShm,idSem;
 TAB_CONNEXIONS *tab;
 
 void afficheTab();
 
 MYSQL* connexion;
-
+void HandlerSIGINT(int sig);
 
 int main()
 {
@@ -34,6 +36,15 @@ int main()
   }
 
   // Armement des signaux
+  struct sigaction A;
+  A.sa_handler = HandlerSIGINT;
+  sigemptyset(&A.sa_mask);
+  A.sa_flags = 0;
+  if (sigaction(SIGINT, &A, NULL) == -1)
+  {
+    perror("Erreur de sigaction");
+    exit(1);
+  }
 
   // Creation des ressources
   fprintf(stderr,"(SERVEUR %d) Creation de la file de messages\n",getpid());
@@ -42,7 +53,6 @@ int main()
     perror("(SERVEUR) Erreur de msgget");
     exit(1);
   }
-  printf("\n\nidQ = %d\n\n",idQ);
 
 
   // Initialisation du tableau de connexions
@@ -76,6 +86,7 @@ int main()
   while(1)
   {
   	fprintf(stderr,"(SERVEUR %d) Attente d'une requete...\n",getpid());
+
     if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),1,0) == -1)
     {
       perror("(SERVEUR) Erreur de msgrcv");
@@ -87,14 +98,72 @@ int main()
     {
       case CONNECT :  
                       fprintf(stderr,"(SERVEUR %d) Requete CONNECT reçue de %d\n",getpid(),m.expediteur);
+                      
+                      for(int i=0;i<6;i++)
+                      {
+                        if(tab->connexions[i].pidFenetre==0)
+                        {
+                          tab->connexions[i].pidFenetre=m.expediteur;
+                          i=6;
+                        }
+                      }
+
                       break; 
 
       case DECONNECT :  
                       fprintf(stderr,"(SERVEUR %d) Requete DECONNECT reçue de %d\n",getpid(),m.expediteur);
+                      printf("test: %d\n", m.expediteur);
+                      for(int i = 0; i<6; i++){
+                        if(tab->connexions[i].pidFenetre == m.expediteur){
+                          tab->connexions[i].pidFenetre = 0;
+                          i=6;
+                        }
+                      }
                       break; 
 
       case LOGIN :  
                       fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%s--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.texte);
+                      
+                      printf("\n\n%s %s %s\n\n",m.data1,m.data2,m.texte);
+
+                      if(strcmp(m.data1,"1")==0) //Nouveau Client
+                      {
+                        if(estPresent(m.data2)==0) //Nouveau Client coché + non existant OU FICHIER NON EXISTANT
+                        {
+                          ajouteUtilisateur(m.data2, m.texte);
+                          printf("Nouveau client créé : bienvenue !\n");        
+                        }
+                        else //Nouveau Client coché + existant
+                        {
+                          printf("Client déjà existant !\n");  
+                        }
+                      }
+                      else //NOUVEAU CLIENT NON COCHE
+                      {
+
+                        if(estPresent(m.data2)==0) //Nouveau Client non coché + non existant
+                        {
+                          printf("Client inconnu...\n");    
+                        }
+                        else //Nouveau Client non coché + existant
+                        {
+                          if(verifieMotDePasse(estPresent(m.data2),m.texte)==-1)
+                          {
+                            printf("Le fichier n'existe pas\n");
+                          }
+
+                          if(verifieMotDePasse(estPresent(m.data2),m.texte)==1)
+                          {
+                            printf("Re-bonjour cher client !\n");
+                          }
+
+                          if(verifieMotDePasse(estPresent(m.data2),m.texte)==0)
+                          {
+                            printf("Mot de passe incorrect...\n");
+                          }      
+                        }
+                      }
+
                       break; 
 
       case LOGOUT :  
@@ -171,3 +240,14 @@ void afficheTab()
   fprintf(stderr,"\n");
 }
 
+void HandlerSIGINT(int sig)
+{
+  if (msgctl(idQ, IPC_RMID, NULL) == -1)
+  {
+    perror("Erreur de msgctl");
+    exit(1);
+  }
+  mysql_close(connexion);
+  exit(0);
+
+}

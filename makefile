@@ -22,9 +22,9 @@ moc_windowadmin.o: moc_windowadmin.cpp
 	g++ -c -pipe -g -std=gnu++11 -Wall -W -D_REENTRANT -fPIC -DQT_DEPRECATED_WARNINGS -DQT_QML_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I../Administrateur -I. -isystem /usr/include/qt5 -isystem /usr/include/qt5/QtWidgets -isystem /usr/include/qt5/QtGui -isystem /usr/include/qt5/QtCore -I. -I. -I/usr/lib64/qt5/mkspecs/linux-g++ -o moc_windowadmin.o moc_windowadmin.cpp
 
 
-Client:	dialogmodification.o mainClient.o windowclient.o moc_dialogmodification.o moc_windowclient.o
+Client:	dialogmodification.o mainClient.o windowclient.o moc_dialogmodification.o moc_windowclient.o FichierUtilisateur.o
 	echo "Creation de Client"
-	g++  -o Client dialogmodification.o mainClient.o windowclient.o moc_dialogmodification.o moc_windowclient.o   /usr/lib64/libQt5Widgets.so /usr/lib64/libQt5Gui.so /usr/lib64/libQt5Core.so /usr/lib64/libGL.so -lpthread
+	g++  -o Client FichierUtilisateur.o dialogmodification.o mainClient.o windowclient.o moc_dialogmodification.o moc_windowclient.o   /usr/lib64/libQt5Widgets.so /usr/lib64/libQt5Gui.so /usr/lib64/libQt5Core.so /usr/lib64/libGL.so -lpthread
 
 dialogmodification.o:	dialogmodification.cpp
 	echo "Creation de dialogmodification.o"
@@ -47,9 +47,9 @@ moc_windowclient.o:	moc_windowclient.cpp
 	g++ -c -pipe -g -std=gnu++11 -Wall -W -D_REENTRANT -fPIC -DQT_DEPRECATED_WARNINGS -DQT_QML_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB -I../UNIX_DOSSIER_FINAL -I. -isystem /usr/include/qt5 -isystem /usr/include/qt5/QtWidgets -isystem /usr/include/qt5/QtGui -isystem /usr/include/qt5/QtCore -I. -I. -I/usr/lib64/qt5/mkspecs/linux-g++ -o moc_windowclient.o moc_windowclient.cpp
 
 
-Serveur:	Serveur.cpp
+Serveur:	Serveur.cpp FichierUtilisateur.cpp
 	echo "Creation de Serveur"
-	g++ Serveur.cpp -o Serveur -I/usr/include/mysql -m64 -L/usr/lib64/mysql -lmysqlclient -lpthread -lz -lm -lrt -lssl -lcrypto -ldl
+	g++ Serveur.cpp -o Serveur FichierUtilisateur.o -I/usr/include/mysql -m64 -L/usr/lib64/mysql -lmysqlclient -lpthread -lz -lm -lrt -lssl -lcrypto -ldl
 
 
 CreationBD:	CreationBD.cpp
@@ -76,8 +76,13 @@ Modification:	Modification.cpp
 	echo "Creation de Modification"
 	g++ Modification.cpp -o Modification -I/usr/include/mysql -m64 -L/usr/lib64/mysql -lmysqlclient -lpthread -lz -lm -lrt -lssl -lcrypto -ldl
 
+FichierUtilisateur:	FichierUtilisateur.cpp
+	echo "Creation de FichierUtilisateur"
+	g++ FichierUtilisateur.cpp -o FichierUtilisateur -I/usr/include/mysql -m64 -L/usr/lib64/mysql -lmysqlclient -lpthread -lz -lm -lrt -lssl -lcrypto -ldl
 
 
+clean2:
+	ipcrm -Q 0x4d2
 
 clean:	
 	rm -f *.o core

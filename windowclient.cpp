@@ -11,7 +11,7 @@ extern WindowClient *w;
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/shm.h>
-
+#include <string.h>
 
 int idQ, idShm;
 #define TIME_OUT 120
@@ -48,6 +48,16 @@ WindowClient::WindowClient(QWidget *parent):QMainWindow(parent),ui(new Ui::Windo
     // Attachement à la mémoire partagée
 
     // Armement des signaux
+    /*struct sigaction A;
+    A.sa_handler=handlerSIGUSR1;
+    sigemptyset(&A.sa_mask);
+    A.sa_flags = 0;
+
+    if (sigaction(SIGINT,&A,NULL) == -1)
+    {
+    perror("Erreur de sigaction");
+    exit(1);
+    }*/
 
     // Envoi d'une requete de connexion au serveur
     
@@ -351,6 +361,16 @@ void WindowClient::dialogueErreur(const char* titre,const char* message)
 void WindowClient::closeEvent(QCloseEvent *event)
 {
     // TO DO
+    MESSAGE MsgDeconnect;
+    MsgDeconnect.type = 1;
+    MsgDeconnect.expediteur = getpid();
+    MsgDeconnect.requete = DECONNECT;
+    if (msgsnd(idQ, &MsgDeconnect, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+    {
+      perror("(Client) Erreur de msgsnd");
+      exit(1);
+    }
+    
 
     QApplication::exit();
 }
@@ -361,7 +381,26 @@ void WindowClient::closeEvent(QCloseEvent *event)
 void WindowClient::on_pushButtonLogin_clicked()
 {
     // TO DO
+    MESSAGE MsgLogin;
+    MsgLogin.type = 1;
+    MsgLogin.expediteur = getpid();
+    MsgLogin.requete = LOGIN;
+    strcpy(MsgLogin.data2, getNom());
+    strcpy(MsgLogin.texte, getMotDePasse());
+    if(isNouveauChecked()==true)
+    {
+      strcpy(MsgLogin.data1, "1"); //nouveau client
+    }
+    else
+    {
+      strcpy(MsgLogin.data1, "0");
+    }
 
+    if (msgsnd(idQ, &MsgLogin, sizeof(MESSAGE) - sizeof(long), 0) == -1)
+    {
+      perror("(Client) Erreur de msgsnd");
+      exit(1);
+    }
 }
 
 void WindowClient::on_pushButtonLogout_clicked()
