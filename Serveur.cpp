@@ -23,7 +23,7 @@ TAB_CONNEXIONS *tab;
 void afficheTab();
 
 MYSQL* connexion;
-void HandlerSIGINT(int sig);
+void Handler(int sig);
 
 int main()
 {
@@ -37,7 +37,7 @@ int main()
 
   // Armement des signaux
   struct sigaction A;
-  A.sa_handler = HandlerSIGINT;
+  A.sa_handler = Handler;
   sigemptyset(&A.sa_mask);
   A.sa_flags = 0;
   if (sigaction(SIGINT, &A, NULL) == -1)
@@ -47,7 +47,7 @@ int main()
   }
 
   // Creation des ressources
-  fprintf(stderr,"(SERVEUR %d) Creation de la file de messages\n",getpid());
+  fprintf(stderr, "(SERVEUR %d) Creation de la file de messages\n", getpid());
   if ((idQ = msgget(CLE,IPC_CREAT | IPC_EXCL | 0600)) == -1)  // CLE definie dans protocole.h
   {
     perror("(SERVEUR) Erreur de msgget");
@@ -93,7 +93,6 @@ int main()
       msgctl(idQ,IPC_RMID,NULL);
       exit(1);
     }
-
     switch(m.requete)
     {
       case CONNECT :  
@@ -122,20 +121,22 @@ int main()
                       break; 
 
       case LOGIN :  
+                      char phraseRetour[50],okORko[3];
+
                       fprintf(stderr,"(SERVEUR %d) Requete LOGIN reçue de %d : --%s--%s--%s--\n",getpid(),m.expediteur,m.data1,m.data2,m.texte);
-                      
-                      printf("\n\n%s %s %s\n\n",m.data1,m.data2,m.texte);
 
                       if(strcmp(m.data1,"1")==0) //Nouveau Client
                       {
                         if(estPresent(m.data2)==0) //Nouveau Client coché + non existant OU FICHIER NON EXISTANT
                         {
                           ajouteUtilisateur(m.data2, m.texte);
-                          printf("Nouveau client créé : bienvenue !\n");        
+                          strcpy(phraseRetour,"Nouveau client créé : bienvenue !\n");
+                          strcpy(okORko,"OK");      
                         }
                         else //Nouveau Client coché + existant
                         {
-                          printf("Client déjà existant !\n");  
+                          strcpy(phraseRetour,"Client déjà existant !\n");
+                          strcpy(okORko,"KO");  
                         }
                       }
                       else //NOUVEAU CLIENT NON COCHE
@@ -143,25 +144,49 @@ int main()
 
                         if(estPresent(m.data2)==0) //Nouveau Client non coché + non existant
                         {
-                          printf("Client inconnu...\n");    
+                          strcpy(phraseRetour,"Client inconnu...\n");
+                          strcpy(okORko,"KO");  
                         }
                         else //Nouveau Client non coché + existant
                         {
                           if(verifieMotDePasse(estPresent(m.data2),m.texte)==-1)
                           {
-                            printf("Le fichier n'existe pas\n");
+                            strcpy(phraseRetour,"Le fichier n'existe pas\n");
+                            strcpy(okORko,"KO");  
                           }
 
                           if(verifieMotDePasse(estPresent(m.data2),m.texte)==1)
                           {
-                            printf("Re-bonjour cher client !\n");
+                            strcpy(phraseRetour,"Re-bonjour cher client !\n");
+                            strcpy(okORko,"OK");  
                           }
 
                           if(verifieMotDePasse(estPresent(m.data2),m.texte)==0)
                           {
-                            printf("Mot de passe incorrect...\n");
+                            strcpy(phraseRetour,"Mot de passe incorrect...\n");
+                            strcpy(okORko,"KO");  
                           }      
                         }
+                      }
+
+                      MESSAGE retourReponse;
+
+                      retourReponse.type = m.expediteur;
+                      retourReponse.expediteur = getpid();
+                      retourReponse.requete = LOGIN;
+                      strcpy(retourReponse.data1,okORko); 
+                      strcpy(retourReponse.texte,phraseRetour);
+                      
+                      if (msgsnd(idQ,&retourReponse,sizeof(MESSAGE)-sizeof(long),0) == -1)
+                      {
+                        perror("(Serveur) Erreur de msgsnd");
+                        exit(1);
+                      }
+                      
+                      if (kill(m.expediteur, SIGUSR1) == -1)
+                      {
+                        perror("Erreur de kill");
+                        exit(1);
                       }
 
                       break; 
@@ -240,14 +265,15 @@ void afficheTab()
   fprintf(stderr,"\n");
 }
 
-void HandlerSIGINT(int sig)
+void Handler(int sig)
 {
-  if (msgctl(idQ, IPC_RMID, NULL) == -1)
-  {
-    perror("Erreur de msgctl");
-    exit(1);
+  if(sig == 2){ 
+    if (msgctl(idQ, IPC_RMID, NULL) == -1)
+    {
+      perror("Erreur de msgctl");
+      exit(1);
+    }
+    mysql_close(connexion);
+    exit(0);
   }
-  mysql_close(connexion);
-  exit(0);
-
 }

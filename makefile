@@ -2,7 +2,7 @@
 
 
 
-Cible:	Administrateur Client Serveur CreationBD BidonFichierPub Publicite Consultation Modification
+Cible:	Administrateur Client Serveur CreationBD BidonFichierPub Publicite Consultation Modification 
 
 
 Administrateur:	mainAdmin.o windowadmin.o moc_windowadmin.o
@@ -82,6 +82,7 @@ FichierUtilisateur:	FichierUtilisateur.cpp
 
 
 clean2:
+	clear
 	ipcrm -Q 0x4d2
 
 clean:	

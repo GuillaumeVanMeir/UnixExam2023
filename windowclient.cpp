@@ -12,6 +12,7 @@ extern WindowClient *w;
 #include <sys/msg.h>
 #include <sys/shm.h>
 #include <string.h>
+#include <signal.h>
 
 int idQ, idShm;
 #define TIME_OUT 120
@@ -48,16 +49,16 @@ WindowClient::WindowClient(QWidget *parent):QMainWindow(parent),ui(new Ui::Windo
     // Attachement à la mémoire partagée
 
     // Armement des signaux
-    /*struct sigaction A;
+    struct sigaction A;
     A.sa_handler=handlerSIGUSR1;
     sigemptyset(&A.sa_mask);
     A.sa_flags = 0;
 
-    if (sigaction(SIGINT,&A,NULL) == -1)
+    if (sigaction(SIGUSR1,&A,NULL) == -1)
     {
-    perror("Erreur de sigaction");
-    exit(1);
-    }*/
+      perror("Erreur de sigaction");
+      exit(1);
+    }
 
     // Envoi d'une requete de connexion au serveur
     
@@ -395,7 +396,6 @@ void WindowClient::on_pushButtonLogin_clicked()
     {
       strcpy(MsgLogin.data1, "0");
     }
-
     if (msgsnd(idQ, &MsgLogin, sizeof(MESSAGE) - sizeof(long), 0) == -1)
     {
       perror("(Client) Erreur de msgsnd");
@@ -531,9 +531,16 @@ void WindowClient::on_checkBox5_clicked(bool checked)
 void handlerSIGUSR1(int sig)
 {
     MESSAGE m;
-    
+
     // ...msgrcv(idQ,&m,...)
+
+    if (msgrcv(idQ,&m,sizeof(MESSAGE)-sizeof(long),getpid(),0) == -1)
+    {
+      perror("(SERVEUR) Erreur de msgrcv");
+      exit(1);
+    }
     
+
       switch(m.requete)
       {
         case LOGIN :
