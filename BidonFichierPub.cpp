@@ -21,7 +21,7 @@ int main()
     {"Les profs d'UNIX et de C++ sont les meilleurs !",5},
     {"Kholanta ce mardi soir à 21h00 sur TF1",7},
     {"En C++, une étape par semaine et c'est gagné !",4},
-    {"Le Labo UNIX, c'est pas compliqué...",6}
+    {"Le Labo UNIX, c'est compliqué...",6}
   };
 
   for (int i=0 ; i<4 ; i++)

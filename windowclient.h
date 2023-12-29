@@ -12,6 +12,7 @@ class WindowClient : public QMainWindow
     Q_OBJECT
 
 public:
+    int CLIENTLOGIN = 0; //0->NOT Login  1->LOGIN
     WindowClient(QWidget *parent = nullptr);
     ~WindowClient();
 

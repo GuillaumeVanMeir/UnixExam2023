@@ -5,6 +5,42 @@
 #include <fcntl.h>
 #include <string.h>
 
+int emplacementLibre()
+{
+  int fd,bytesLu,position=0;
+  UTILISATEUR u;
+
+  if ((fd = open(FICHIER_UTILISATEURS,O_RDONLY)) == -1)
+  {
+    perror("Erreur lors de l'ouverture du fichier");
+    exit(1);
+  }
+
+  while((bytesLu = read(fd,&u,sizeof(UTILISATEUR)) ) == sizeof(UTILISATEUR))
+  {
+    position++;
+    
+    if(strcmp(u.nom,"-1") == 0)
+    {
+      if (close(fd))
+      {
+        perror("\nErreur de close() dans emplacementLibre");
+        exit(1);
+      }
+
+      return position;
+    }
+  }
+
+  if (close(fd))
+  {
+    perror("\nErreur de close() dans emplacementLibre");
+    exit(1);
+  }
+
+  return 0;
+}
+
 int estPresent(const char* nom)
 {
   // TO DO
@@ -86,33 +122,54 @@ int hash(const char* motDePasse)
 void ajouteUtilisateur(const char* nom, const char* motDePasse)
 {
   // TO DO
-  int fd,rc,mdpHash=0;
+  int fd,rc,mdpHash=0,retour=0;
   UTILISATEUR u;
 
-  if ((fd = open(FICHIER_UTILISATEURS,O_WRONLY | O_CREAT | O_APPEND,0664)) == -1) //ouvre fichier en écriture 
-  {
-    perror("Erreur de open() dans ajouteClient");
-  }
+    if ((fd = open(FICHIER_UTILISATEURS,O_RDWR | O_CREAT,0664)) == -1) //ouvre fichier en écriture 
+    {
+      perror("Erreur de open() dans ajouteClient");
+    }
 
-  if ((rc = lseek(fd,0,SEEK_END)) == -1) //position fin de fichier
-  {
-    perror("Erreur de lseek(3) dans ajouteClient");
-    printf("Position dans le fichier : %d dans ajouteClient\n",rc);
-  }
-  else  //écris en fin de fichier le nom+hash du nouveau client
-  {
-    strcpy(u.nom,nom);
-    mdpHash=hash(motDePasse);
-    u.hash=mdpHash;
+    retour=emplacementLibre();
+    
+    if(retour != 0)
+    {
+      lseek(fd,(retour-1)*sizeof(UTILISATEUR), SEEK_SET);
 
-    write(fd,&u,sizeof(UTILISATEUR)); //Ecrit dans le fichier
-  }
+      if ((read(fd,&u,sizeof(UTILISATEUR))) == -1) 
+      {
+        perror("Erreur de read(1) dans ajouteClient");
+      }
+      strcpy(u.nom,nom);
+      mdpHash=hash(motDePasse);
+      u.hash=mdpHash;
 
-  if (close(fd))
-  {
-    perror("\nErreur de close() dans ajouteClient");
-    exit(1);
-  }
+      lseek(fd,(retour-1)*sizeof(UTILISATEUR), SEEK_SET);
+      write(fd,&u,sizeof(UTILISATEUR));
+    }
+    else if(retour == 0)
+    {
+      if ((rc = lseek(fd,0,SEEK_END)) == -1) //position fin de fichier
+      {
+        perror("Erreur de lseek(3) dans ajouteClient");
+        printf("Position dans le fichier : %d dans ajouteClient\n",rc);
+      }
+      else  //écris en fin de fichier le nom+hash du nouveau client
+      {
+        strcpy(u.nom,nom);
+        mdpHash=hash(motDePasse);
+        u.hash=mdpHash;
+
+        write(fd,&u,sizeof(UTILISATEUR)); //Ecrit dans le fichier
+      }
+    }
+
+    if (close(fd))
+    {
+      perror("\nErreur de close() dans ajouteClient");
+      exit(1);
+    }
+  
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

@@ -10,6 +10,8 @@ typedef struct
   int   hash;
 } UTILISATEUR;
 
+int emplacementLibre();
+
 int estPresent(const char* nom);
 // retourne -1 en cas d'erreur
 //           0 si pas trouve

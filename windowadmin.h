@@ -25,6 +25,8 @@ public:
     void setNbSecondes(int n);
     int getNbSecondes();
 
+
+
     // Boites de dialogue
     void dialogueMessage(const char *titre, const char *message);
     void dialogueErreur(const char *titre, const char *message);
