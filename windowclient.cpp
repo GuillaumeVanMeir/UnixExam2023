@@ -384,12 +384,13 @@ void WindowClient::dialogueErreur(const char* titre,const char* message)
 void WindowClient::closeEvent(QCloseEvent *event)
 {
     // TO DO
-    
+    event=event;    
 
     MESSAGE MsgDeconnect;
     MsgDeconnect.type = 1;
     MsgDeconnect.expediteur = getpid();
     if(w->CLIENTLOGIN){
+      // clic sur deconnecter
       MsgDeconnect.requete = LOGOUT;
       if (msgsnd(idQ, &MsgDeconnect, sizeof(MESSAGE) - sizeof(long), 0) == -1)
       {
@@ -400,6 +401,7 @@ void WindowClient::closeEvent(QCloseEvent *event)
     MsgDeconnect.requete = DECONNECT;
     if (msgsnd(idQ, &MsgDeconnect, sizeof(MESSAGE) - sizeof(long), 0) == -1)
     {
+      // clic sur croix
       perror("(Client) Erreur de msgsnd");
       exit(1);
     }
@@ -414,16 +416,19 @@ void WindowClient::closeEvent(QCloseEvent *event)
 void WindowClient::on_pushButtonLogin_clicked()
 {
     // TO DO
+    // message LOGIN (clic sur bouton Connecter)
     MESSAGE MsgLogin;
     MsgLogin.type = 1; //car envoi au serveur
     MsgLogin.expediteur = getpid();
     MsgLogin.requete = LOGIN;
+    // Nom utilisateur = -1 qd utilisateur supprimé dans le fichier (pr mettre un flag du genre "tu peux réécrire ici" pr un prochain nouvel utilisateur)
     if(strcmp(getNom(),"-1")==0)
     {
       dialogueErreur("Login", "Nom d'utilisateur -1 réservé!!!");
       return;
     }
   
+    // passage du Nom, mot de passe et de l'info nouveau client (1) ou non (0) 
     strcpy(MsgLogin.data2, getNom());
     strcpy(MsgLogin.texte, getMotDePasse());
     if(isNouveauChecked()==true)
@@ -444,6 +449,8 @@ void WindowClient::on_pushButtonLogin_clicked()
 
 void WindowClient::on_pushButtonLogout_clicked()
 {
+  //message LOGOUT (clic sur bouton Déconnecter)
+    alarm(0);
     MESSAGE MsgLogout;
 
     MsgLogout.type=1;
@@ -457,13 +464,18 @@ void WindowClient::on_pushButtonLogout_clicked()
     }
 
     logoutOK();
+    timeOut = TIME_OUT;
+    setTimeOut(timeOut);
     w->CLIENTLOGIN = 0;
 }
 
 void WindowClient::on_pushButtonEnvoyer_clicked()
 {
     // TO DO
+    // Desactiver timer
     alarm(0);
+
+    // message SEND (clic sur bouton envoyer pour un message)
     MESSAGE MsgSendM;
 
     MsgSendM.type=1;
@@ -471,6 +483,7 @@ void WindowClient::on_pushButtonEnvoyer_clicked()
     MsgSendM.requete = SEND;
     strcpy(MsgSendM.texte, w->getAEnvoyer());
 
+    // si texte du message != vide
     if(strcmp(MsgSendM.texte,"")!=0)
     {
       if (msgsnd(idQ, &MsgSendM, sizeof(MESSAGE) - sizeof(long), 0) == -1)
@@ -479,11 +492,14 @@ void WindowClient::on_pushButtonEnvoyer_clicked()
         exit(1);
       }
 
+      // afficher son message dans sa zone de discussion
       w->ajouteMessage(getNom(),MsgSendM.texte);
 
+      // reset zone saisie du message
       w->setAEnvoyer("");
     }
     
+    // Activation timer
     timeOut = TIME_OUT;
     setTimeOut(timeOut);
     alarm(1);
@@ -492,8 +508,10 @@ void WindowClient::on_pushButtonEnvoyer_clicked()
 void WindowClient::on_pushButtonConsulter_clicked()
 {
     // TO DO
+    // Desactiver timer
     alarm(0);
     
+    // message CONSULT (Clic sur le bouton consulter qui envoie juste le nom saisi et est utile pour afficher son gsm et son mail)
     MESSAGE Msgconsult;
 
     Msgconsult.type = 1;
@@ -510,6 +528,7 @@ void WindowClient::on_pushButtonConsulter_clicked()
     w->setGsm("...en attente...");
     w->setEmail("...en attente...");
 
+    // Activation timer
     timeOut = TIME_OUT;
     setTimeOut(timeOut);
     alarm(1);
@@ -518,8 +537,9 @@ void WindowClient::on_pushButtonConsulter_clicked()
 void WindowClient::on_pushButtonModifier_clicked()
 {
   // TO DO
+  // Desactiver timer
   alarm(0);
-  // Envoi d'une requete MODIF1 au serveur
+  // Envoi d'une requete MODIF1 au serveur (clic sur bouton modifier)
   MESSAGE m;
   m.requete = MODIF1;
   m.expediteur = getpid();
@@ -530,31 +550,29 @@ void WindowClient::on_pushButtonModifier_clicked()
     exit(1);
   }
 
-  
 
-  // ...
+  // Entre temps, le serveur envoie une requete modifi1 au processus modification avec le nom du client qui veut se modifier
+
 
   // Attente d'une reponse en provenance de Modification
   fprintf(stderr,"(CLIENT %d) Attente reponse MODIF1\n",getpid());
-  // ...
+
   RCV_CLIENT:
   if (msgrcv(idQ, &m, sizeof(MESSAGE) - sizeof(long), getpid(), 0) == -1)
   {
-    if (errno == EINTR)
+    if (errno == EINTR) // si msgrcv interrompu par un signal
       goto RCV_CLIENT;
     perror("(CLIENT) Erreur de msgrcv");
     exit(1);
   }
 
-  // Verification si la modification est possible
-  // if (strcmp(m.data1, "KO") == 0 && strcmp(m.data2, "") == 0 && strcmp(m.texte, "") == 0)
-  // {
-  //   QMessageBox::critical(w, "Problème...", "Mauvais nom d'utilisateur...");
-  //   return;
-  // }
+
   if (strcmp(m.data1,"KO") == 0 && strcmp(m.data2,"KO") == 0 && strcmp(m.texte,"KO") == 0)
   {
     QMessageBox::critical(w,"Problème...","Modification déjà en cours...");
+    timeOut = TIME_OUT;
+    setTimeOut(timeOut);
+    alarm(1);
     return;
   }
 
@@ -569,6 +587,7 @@ void WindowClient::on_pushButtonModifier_clicked()
   strcpy(email,dialogue.getEmail());
 
   // Envoi des données modifiées au serveur
+  // Envoi d'une requete MODIF2 au serveur (clic sur bouton ok de la fenetre modification (donc pour valiider les nouvelles données mdp, gsm et mail))
   strcpy(m.data1, motDePasse);
   strcpy(m.data2, gsm);
   strcpy(m.texte, email);
@@ -581,6 +600,7 @@ void WindowClient::on_pushButtonModifier_clicked()
     exit(1);
   }
 
+// Activation timer
   timeOut = TIME_OUT;
   setTimeOut(timeOut);
   alarm(1);
@@ -591,7 +611,10 @@ void WindowClient::on_pushButtonModifier_clicked()
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 void WindowClient::on_checkBox1_clicked(bool checked)
 {
+  // Desactiver timer
     alarm(0);
+
+    // Envoi d'une requete ACCEPT_USER OU REFUSE_USER au serveur (coché OU non coché)
     MESSAGE MsgConvers;
     MsgConvers.type = 1; //car envoi au serveur
     MsgConvers.expediteur = getpid();
@@ -619,6 +642,7 @@ void WindowClient::on_checkBox1_clicked(bool checked)
       exit(1);
     }
     
+    // Activation timer
     timeOut = TIME_OUT;
     setTimeOut(timeOut);
     alarm(1);
@@ -627,6 +651,8 @@ void WindowClient::on_checkBox1_clicked(bool checked)
 void WindowClient::on_checkBox2_clicked(bool checked)
 {
     alarm(0);
+
+    // Envoi d'une requete ACCEPT_USER OU REFUSE_USER au serveur (coché OU non coché)
     MESSAGE MsgConvers;
     MsgConvers.type = 1; //car envoi au serveur
     MsgConvers.expediteur = getpid();
@@ -661,6 +687,8 @@ void WindowClient::on_checkBox2_clicked(bool checked)
 void WindowClient::on_checkBox3_clicked(bool checked)
 {
     alarm(0);
+
+    // Envoi d'une requete ACCEPT_USER OU REFUSE_USER au serveur (coché OU non coché)
     MESSAGE MsgConvers;
     MsgConvers.type = 1; //car envoi au serveur
     MsgConvers.expediteur = getpid();
@@ -695,6 +723,8 @@ void WindowClient::on_checkBox3_clicked(bool checked)
 void WindowClient::on_checkBox4_clicked(bool checked)
 {
     alarm(0);
+
+    // Envoi d'une requete ACCEPT_USER OU REFUSE_USER au serveur (coché OU non coché)
     MESSAGE MsgConvers;
     MsgConvers.type = 1; //car envoi au serveur
     MsgConvers.expediteur = getpid();
@@ -729,6 +759,8 @@ void WindowClient::on_checkBox4_clicked(bool checked)
 void WindowClient::on_checkBox5_clicked(bool checked)
 {
     alarm(0);
+
+    // Envoi d'une requete ACCEPT_USER OU REFUSE_USER au serveur (coché OU non coché)
     MESSAGE MsgConvers;
     MsgConvers.type = 1; //car envoi au serveur
     MsgConvers.expediteur = getpid();
@@ -767,7 +799,6 @@ void handlerSIG(int sig)
 {
   MESSAGE m;
   
-  // ...msgrcv(idQ,&m,...)
 
   switch(sig)
   {
@@ -792,37 +823,41 @@ void handlerSIG(int sig)
 
             break;
 
-          case ADD_USER :
+          case ADD_USER ://tout le monde est prévenu qu'il y a un nouvel utilisateur co
             for(int i=1; i<6; i++)
             {                         
               if(!strcmp(w->getPersonneConnectee(i),""))
               {                           
                 w->setPersonneConnectee(i,m.data1);                           
-                i=6;                         
-                }                       
+                i=6;
+                w->ajouteMessage(m.data1, " est connecté");
+              }
+              
             }
 
             break;
 
-          case REMOVE_USER :                       
+          case REMOVE_USER ://tout le monde est prévenu qu'il y a un nouvel utilisateur deco         
             // TO DO
             for(int i=1;i<6;i++)
             {                         
               if(strcmp(w->getPersonneConnectee(i),m.data1)==0)                         
-              {                           
+              {             
+                w->ajouteMessage(m.data1," est déconnecté");
                 w->setPersonneConnectee(i,"");                           
                 i=6;                         
-              }                       
+              }
+
             }
 
             break;
 
-          case SEND :                       
+          case SEND ://envoie d'un message            
             // TO DO
             w->ajouteMessage(m.data1,m.texte);
             break;
 
-          case CONSULT :
+          case CONSULT ://consulter les infos mail et gsm d'un utilisateur
             // TO DO    
             if(strcmp(m.data1,"KO") == 0){
               w->setGsm("");
@@ -838,7 +873,7 @@ void handlerSIG(int sig)
       }      
       break;
 
-    case  SIGALRM:
+    case  SIGALRM:// gestion du timer
     {
       if (timeOut == 0)
       {
@@ -852,7 +887,7 @@ void handlerSIG(int sig)
       }
       break;}
 
-  case SIGUSR2:
+  case SIGUSR2://recup la publicité dans la mémoire partagée
     w->setPublicite(pshm);
     break;
 

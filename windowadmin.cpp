@@ -14,42 +14,6 @@ WindowAdmin::WindowAdmin(QWidget *parent):QMainWindow(parent),ui(new Ui::WindowA
 {
     ui->setupUi(this);
     ::close(2);
-
-
-    MESSAGE MsgConnect;
-
-
-    // Recuperation de l'identifiant de la file de messages
-    fprintf(stderr, "(ADMINISTRATEUR %d) Recuperation de l'id de la file de messages\n", getpid());
-
-    if ((idQ = msgget(CLE, 0)) == -1)
-    {
-      fprintf(stderr, "\n(ADMINISTRATEUR %d) Erreur de msgget", getpid());
-      exit(1);
-    }
-    MsgConnect.type = 1;
-    MsgConnect.expediteur = getpid();
-    MsgConnect.requete = LOGIN_ADMIN;
-
-    if (msgsnd(idQ, &MsgConnect, sizeof(MESSAGE) - sizeof(long), 0) == -1)
-    {
-      perror("(ADMINISTRATEUR) Erreur de msgsnd");
-      exit(1);
-    }
-    fprintf(stderr, "(ADMINISTRATEUR %d) attente d'une réponse\n", getpid());
-
-    if (msgrcv(idQ, &MsgConnect, sizeof(MESSAGE) - sizeof(long), getpid(), 0) == -1)
-    {
-      perror("(ADMINISTRATEUR) Erreur de msgrcv");
-      exit(1);
-    }
-    if(strcmp(MsgConnect.data1,"KO")==0){
-      printf("(ADMINISTRATEUR %d) Erreur: un autre admin est déjà connecté\n", getpid());
-      exit(1);
-    }
-    else if (strcmp(MsgConnect.data1, "OK") == 0){
-      printf("(ADMINISTRATEUR %d) Connexion Réussi\n", getpid());
-    }
 }
 
 WindowAdmin::~WindowAdmin()
@@ -160,12 +124,13 @@ void WindowAdmin::on_pushButtonAjouterUtilisateur_clicked()
   strcpy(m.data1,getNom());
   strcpy(m.data2,getMotDePasse());
   
+  //envoie du message au serveur
   if (msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
   {
     perror("(Admin) Erreur de msgsnd");
     exit(1);
   }
-
+  //reception du message
   if (msgrcv(idQ, &m, sizeof(MESSAGE) - sizeof(long), getpid(), 0) == -1)
   {
     perror("(ADMINISTRATEUR) Erreur de msgrcv");

@@ -33,17 +33,13 @@ int main()
   struct sigaction A;
   A.sa_handler=handlerSIG;
   sigemptyset(&A.sa_mask);
-  if (sigaction(SIGTERM,&A,NULL) == -1)
-    {
-      perror("Erreur de sigaction");
-      exit(1);
-    }
+  
 
-    if (sigaction(SIGUSR1, &A, NULL) == -1)
-    {
-      perror("Erreur de sigaction");
-      exit(1);
-    }
+  if (sigaction(SIGUSR1, &A, NULL) == -1)
+  {
+    perror("Erreur de sigaction");
+    exit(1);
+  }
   // Masquage de SIGINT
 
   
@@ -77,7 +73,7 @@ int main()
   }
   OPEN_PUB:
 
-  if ((fd = open("publicites.dat",O_RDWR)) == -1)
+  if ((fd = open("publicites.dat",O_RDWR)) == -1)//ouvre le fichier pub, si pas cree le processus attend
   {
     if (errno == ENOENT){ 
       pause();
@@ -86,11 +82,10 @@ int main()
     perror("Erreur de open()");
     exit(1);
   }
-  printf("testfd: %d\n",fd);
   
   while(1)
   {
-    // Lecture d'une publicité dans le fichier
+    //verification si le serveur est encore present
     if(kill(getppid(),0) == -1){
       if (close(fd))
       {
@@ -100,7 +95,8 @@ int main()
       exit(1);
 
     }
-    ;
+    
+    // Lecture d'une publicité dans le fichier
     if ((lecture = read(fd, &pub, sizeof(PUBLICITE))) == -1)
     {
       close(fd);
@@ -137,14 +133,6 @@ int main()
   }
 }
 
-void handlerSIG(int sig){
-
-  if(sig == SIGTERM){
-    if (close(fd))
-    {
-      perror("Erreur de close()");
-      exit(1);
-    }
-    exit(1);
-  }
+void handlerSIG(int sig){//armement sinon comportement par défaut de sigusr1 ferme le processus 
+  return;
 }

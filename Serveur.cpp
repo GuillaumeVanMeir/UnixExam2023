@@ -67,16 +67,6 @@ int main()
   fprintf(stderr, "(SERVEUR %d) Initialisation de la table des connexions\n", getpid());
   tab = (TAB_CONNEXIONS *)malloc(sizeof(TAB_CONNEXIONS));
 
-  if ((idSem = semget(CLE,1,IPC_CREAT | IPC_EXCL | 0600)) == -1)
-  {
-    perror("(SERVEUR) Erreur de semget");
-    exit(1);
-  }
-  if (semctl(idSem,0,SETVAL,1) == -1)
-  {
-    perror("Erreur de semctl (1)");
-    exit(1);
-  }
 
   for (int i = 0; i < 6; i++)
   {
@@ -93,8 +83,25 @@ int main()
 
   afficheTab();
 
-  // Creation du processus Publicite
+  // Initialisation de la sémaphore
+  if ((idSem = semget(CLE,1,IPC_CREAT | IPC_EXCL | 0600)) == -1)
+  {
+    perror("(SERVEUR) Erreur de semget");
+    exit(1);
+  }
+  if (semctl(idSem,0,SETVAL,1) == -1)
+  {
+    perror("Erreur de semctl (1)");
+    exit(1);
+  }
+  // Initialisation de la mémoir partagé
+  if ((idShm = shmget(CLE, 200 * sizeof(char), IPC_CREAT | IPC_EXCL | 0600)) == -1)
+  {
+    perror("Erreur de shmget");
+    exit(1);
+  }
 
+  // Creation du processus Publicite
   int i, k, j;
   MESSAGE m;
   MESSAGE reponse;
@@ -105,11 +112,6 @@ int main()
   int idPub;
   int fd;
 
-  if ((idShm = shmget(CLE, 200 * sizeof(char), IPC_CREAT | IPC_EXCL | 0600)) == -1)
-  {
-    perror("Erreur de shmget");
-    exit(1);
-  }
 
   if ((idPub = fork()) == -1)
   {
@@ -119,7 +121,7 @@ int main()
 
   if (idPub == 0)
   {
-
+    //processus fils Publicite
     if (int r = execl("./Publicite", NULL) == -1)
     {
       perror("Erreur de execl()");
@@ -133,9 +135,11 @@ int main()
   while (1)
   {
     fprintf(stderr, "(SERVEUR %d) Attente d'une requete...\n", getpid());
+    //reception d'un message
     RCV_SERV:
     if (msgrcv(idQ, &m, sizeof(MESSAGE) - sizeof(long), 1, 0) == -1)
     {
+      //en cas d'arret de la fonction à cause d'un signal utilisation de jump
       if (errno == EINTR)
         goto RCV_SERV;
       msgctl(idQ, IPC_RMID, NULL);
@@ -147,8 +151,8 @@ int main()
     switch (m.requete)
     {
     case CONNECT:
+      // Ajout du pid d'un client dans la tab de connexion
       fprintf(stderr, "(SERVEUR %d) Requete CONNECT reçue de %d\n", getpid(), m.expediteur);
-
       for (int i = 0; i < 6; i++)
       {
         if (tab->connexions[i].pidFenetre == 0)
@@ -161,6 +165,7 @@ int main()
       break;
 
     case DECONNECT:
+      //Suppression du pid du client dans la table de connexion 
       fprintf(stderr, "(SERVEUR %d) Requete DECONNECT reçue de %d\n", getpid(), m.expediteur);
       for (int i = 0; i < 6; i++)
       {
@@ -185,6 +190,7 @@ int main()
           strcpy(phraseRetour, "Nouveau client créé : bienvenue !\n");
           strcpy(okORko, "OK");
 
+          //ajout du client dans la BD
           char requete[256];
           sprintf(requete, "insert into UNIX_FINAL values (NULL,'%s','%s','%s');", m.data2, "---", "---");
           MYSQL *connexion = mysql_init(NULL);
@@ -216,8 +222,21 @@ int main()
 
           if (verifieMotDePasse(estPresent(m.data2), m.texte) == 1)
           {
-            strcpy(phraseRetour, "Re-bonjour cher client !\n");
-            strcpy(okORko, "OK");
+            int clientconnect = 0; 
+            //gestion de la demande de login avec un client déjà login
+            for (int i = 0; i < 6; i++)
+            {
+              if (strcmp(m.data2,tab->connexions[i].nom) ==0){
+                i=6;
+                strcpy(phraseRetour, "Client deja connecte\n");
+                strcpy(okORko, "KO");
+                clientconnect = 1;
+              }
+            }
+            if(clientconnect==0){ 
+              strcpy(phraseRetour, "Re-bonjour cher client !\n");
+              strcpy(okORko, "OK");
+            }
           }
 
           if (verifieMotDePasse(estPresent(m.data2), m.texte) == 0)
@@ -228,6 +247,7 @@ int main()
         }
       }
 
+      //initialisation du message de retour du LOGIN
       MESSAGE retourReponse;
 
       retourReponse.type = m.expediteur;
@@ -248,6 +268,7 @@ int main()
         perror("Erreur de kill");
         exit(1);
       }
+      //ajout du nom de client dans la table de connexion
       if (strcmp(okORko, "OK") == 0)
       {
         SendAddUser(m);
@@ -264,6 +285,7 @@ int main()
       break;
 
     case LOGOUT:
+      // Suppression du nom de client dans la table de connexion
       fprintf(stderr, "(SERVEUR %d) Requete LOGOUT reçue de %d \n", getpid(), m.expediteur);
       for (int i = 0; i < 6; i++)
       {
@@ -293,6 +315,7 @@ int main()
     case ACCEPT_USER:
       TempPid = 0;
       fprintf(stderr, "(SERVEUR %d) Requete ACCEPT_USER reçue de %d\n", getpid(), m.expediteur);
+      //trouve le pid du client accepte en fonction de son nom
       for (int i = 0; i < 6; i++)
       {
         if (strcmp(m.data1, tab->connexions[i].nom) == 0)
@@ -301,6 +324,7 @@ int main()
           i = 6;
         }
       }
+      //ajoute le pid du client accepte a l'autre client
       for (int i = 0; i < 6; i++)
       {
         if (tab->connexions[i].pidFenetre == m.expediteur)
@@ -322,6 +346,7 @@ int main()
     case REFUSE_USER:
       fprintf(stderr, "(SERVEUR %d) Requete REFUSE_USER reçue de %d\n", getpid(), m.expediteur);
 
+      // trouve le pid du client refuse en fonction de son nom
       for (int i = 0; i < 6; i++)
       {
         if (strcmp(m.data1, tab->connexions[i].nom) == 0)
@@ -330,6 +355,8 @@ int main()
           i = 6;
         }
       }
+
+      // supprime le pid du client refuse a l'autre client
       for (int i = 0; i < 6; i++)
       {
         if (tab->connexions[i].pidFenetre == m.expediteur)
@@ -356,12 +383,14 @@ int main()
       sendMessage2Clients.expediteur = 1;
       strcpy(sendMessage2Clients.texte, m.texte);
 
+      //trouve les clients qui ont accepté de discuté avec le client
       for (int i = 0; i < 6; i++)
       {
         if (tab->connexions[i].pidFenetre == m.expediteur)
         {
           strcpy(sendMessage2Clients.data1, tab->connexions[i].nom);
 
+          //envoie le message au différent client
           for (int j = 0; j < 5; j++)
           {
             if (tab->connexions[i].autres[j] != 0)
@@ -388,6 +417,7 @@ int main()
     case UPDATE_PUB:
       fprintf(stderr, "(SERVEUR %d) Requete UPDATE_PUB reçue de %d\n", getpid(), m.expediteur);
       tab->pidPublicite = m.expediteur;
+      //envoie un signal à tous les clients
       for (int i = 0; i < 6; i++)
       {
         if (tab->connexions[i].pidFenetre != 0)
@@ -412,6 +442,7 @@ int main()
       }
       if (idConsult == 0)
       {
+        //code du fils Consultation
         if (int r = execl("./Consultation", NULL) == -1)
         {
           perror("Erreur de execl()");
@@ -421,7 +452,7 @@ int main()
       else if (idConsult != 0)
       {
         m.type = idConsult;
-
+        //transfert du message au processus consultation
         if (msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
         {
           perror("ICI(Serveur) Erreur de msgsnd");
@@ -442,6 +473,8 @@ int main()
       }
       if (idmodif == 0)
       {
+        // code du fils Modification
+
         if (int r = execl("./Modification", NULL) == -1)
         {
           perror("Erreur de execl()");
@@ -451,6 +484,7 @@ int main()
       else if (idmodif != 0)
       {
         m.type = idmodif;
+        //recupère le nom du client qui fait la demande
         for (int i = 0; i < 6; i++)
         {
           if (m.expediteur == tab->connexions[i].pidFenetre)
@@ -462,6 +496,7 @@ int main()
         }
       }
 
+      //envoie du message au processus modification
       if (msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
       {
         perror("ICI3(Serveur) Erreur de msgsnd");
@@ -473,6 +508,7 @@ int main()
     case MODIF2:
       fprintf(stderr, "(SERVEUR %d) Requete MODIF2 reçue de %d\n", getpid(), m.expediteur);
 
+      //recuperation du pid du processus modification
       for (int i = 0; i < 6; i++)
       {
         if (m.expediteur == tab->connexions[i].pidFenetre)
@@ -482,6 +518,7 @@ int main()
         }
       }
 
+      // transfert du message au processus modification
       if (msgsnd(idQ, &m, sizeof(MESSAGE) - sizeof(long), 0) == -1)
       {
         perror("ICI3(Serveur) Erreur de msgsnd");
@@ -492,6 +529,7 @@ int main()
 
     case LOGIN_ADMIN:
       fprintf(stderr, "(SERVEUR %d) Requete LOGIN_ADMIN reçue de %d\n", getpid(), m.expediteur);
+      //verification de la presence d'un admin
       if(tab->pidAdmin ==0){
         tab->pidAdmin = m.expediteur;
         strcpy(m.data1, "OK");
@@ -520,6 +558,7 @@ int main()
       operation.sem_num = 0;
       operation.sem_op = -1;
       operation.sem_flg = IPC_NOWAIT;
+      //prise de la semaphore
       if (semop(idSem, &operation, 1) == -1)
       {
         strcpy(phraseRetour, "Erreur pas d'ajout ni de modif de mdp !\n");
@@ -534,6 +573,7 @@ int main()
         {
           ajouteUtilisateur(m.data1, m.data2);
 
+          //ajout de l'utilisateur à la BD
           char requete[256];
           sprintf(requete, "insert into UNIX_FINAL values (NULL,'%s','%s','%s');", m.data1, "---", "---");
           MYSQL *connexion = mysql_init(NULL);
@@ -546,6 +586,7 @@ int main()
         }
         else if((pos=estPresent(m.data1)) != 0)//Client existant
         {
+          //modifiction du mdp de l'utilisateur
           UTILISATEUR u;
           if(strcmp(m.data1,"")!=0)
           {
@@ -583,6 +624,7 @@ int main()
         fprintf(stderr, "(SERVEUR %d) Libération du sémaphore 0\n", getpid());
       }
       
+      //envoie du message a admin
       m.type=m.expediteur;
       m.expediteur=getpid();
       m.requete=NEW_USER;
@@ -622,7 +664,7 @@ int main()
           int fd;
           UTILISATEUR u;
 
-
+          //supression de l'utilisateur dans la BD
           char requete[256];
           sprintf(requete, "DELETE FROM UNIX_FINAL WHERE UPPER(nom) LIKE UPPER('%s');",m.data1);
           MYSQL *connexion = mysql_init(NULL);
@@ -630,7 +672,7 @@ int main()
           mysql_query(connexion, requete);
           mysql_close(connexion);
 
-
+          //suppresion de l'utilisateur dans le fichier dat
           if ((fd = open("utilisateurs.dat",O_RDWR,0664)) == -1)
           {
             perror("Erreur de fopen() dans Modification");
@@ -680,6 +722,7 @@ int main()
       fprintf(stderr, "(SERVEUR %d) Requete NEW_PUB reçue de %d\n", getpid(), m.expediteur);
       int fd;
       int signalpub = 0;
+      //création du fichier pub si il n'est pas existant 
       if ((fd = open("publicites.dat", O_RDWR|O_CREAT|O_EXCL, 0664)) == -1)
       {
         signalpub = 1;
@@ -688,15 +731,15 @@ int main()
         exit(1);
         }
       }
+      //ecriture dans le fichier pub
       lseek(fd, 0, SEEK_END);
       pub.nbSecondes = atoi(m.data1);
       strcpy(pub.texte, m.texte);
       write(fd, &pub, sizeof(PUBLICITE));
       close(fd);
-      if(signalpub == 0)
+      if(signalpub == 0)//envoie du signal au processus pub si le fichier n'existait pas
         kill(tab->pidPublicite, SIGUSR1);
-      
-      
+          
       break;
     }
     afficheTab();
@@ -726,7 +769,7 @@ void Handler(int sig)
 
   switch (sig)
   {
-  case SIGINT:
+  case SIGINT://supprime ou deconnecte les différentes ressources liees au serveur lors d'un CTRL+C
     if (msgctl(idQ, IPC_RMID, NULL) == -1)
     {
       perror("Erreur de msgctl");
@@ -753,7 +796,7 @@ void Handler(int sig)
     exit(0);
     break;
 
-  case SIGCHLD:
+  case SIGCHLD://supprime la pid du fils zombi dans la table de processus et enleve son pid de la table des connexions
     int pidmodif = wait(NULL);
     printf("(SERVEUR) Suppression du fils zombi %d\n", pidmodif);
     for (int i = 0; i < 6; i++)
@@ -770,6 +813,7 @@ void Handler(int sig)
 void SendAddUser(MESSAGE sender)
 {
   MESSAGE AddUsserMessage;
+  //envoie un message à tous les clients lorsqu'un nouveau client se connecte
   for (int i = 0; i < 6; i++)
   {
     if (strcmp(tab->connexions[i].nom, "") != 0)
@@ -780,7 +824,7 @@ void SendAddUser(MESSAGE sender)
       strcpy(AddUsserMessage.data1, sender.data2);
       if (msgsnd(idQ, &AddUsserMessage, sizeof(MESSAGE) - sizeof(long), 0) == -1)
       {
-        perror("ICI3(Serveur) Erreur de msgsnd");
+        perror("(Serveur) Erreur de msgsnd");
         exit(1);
       }
       if (kill(AddUsserMessage.type, SIGUSR1) == -1)
@@ -790,6 +834,7 @@ void SendAddUser(MESSAGE sender)
     }
   }
 
+  //envoie au nouveau client le nom des différents clients connectes
   for (int i = 0; i < 6; i++)
   {
     if (strcmp(tab->connexions[i].nom, "") != 0)
@@ -801,7 +846,7 @@ void SendAddUser(MESSAGE sender)
 
       if (msgsnd(idQ, &AddUsserMessage, sizeof(MESSAGE) - sizeof(long), 0) == -1)
       {
-        perror("ICI4(Serveur) Erreur de msgsnd");
+        perror("(Serveur) Erreur de msgsnd");
         exit(1);
       }
 
@@ -816,6 +861,7 @@ void SendAddUser(MESSAGE sender)
 
 void SendRemoveUser(MESSAGE sender)
 {
+  //envoi un message pour prevenir les autres client lors du LOGOUT d'un client
   MESSAGE RemoveUsserMessage;
   for (int i = 0; i < 6; i++)
   {
